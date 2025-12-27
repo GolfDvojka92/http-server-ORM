@@ -10,4 +10,5 @@ Connection: close
 U slučaju da datoteka ne postoji, šalje se odgovor
 
 HTTP/1.1 404 Page not found
+Zadatak 8 – HTTP server
 Connection: close
