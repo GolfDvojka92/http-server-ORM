@@ -8,8 +8,9 @@
 
 #define IP_ADDRESS "192.168.100.3"
 #define PORT 8080
-#define DEFAULT_BUFF_SIZE 512
+#define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
+#define HEADER_SIZE_ESTIMATE 256
 
 void error(void* msg) {
     perror((char*)msg);
@@ -17,9 +18,18 @@ void error(void* msg) {
 }
 
 void parseRequest(char* buffer, ssize_t buf_len, char* method, char* path, char* protocol_version) {
-    method = strtok(buffer, " ");
-    path = strtok(NULL, " ");
-    protocol_version = strtok(NULL, " ");
+    char *saveptr; // necessary because of thread safety
+    method = strtok_r(buffer, " ", &saveptr);
+    path = strtok_r(NULL, " ", &saveptr);
+    protocol_version = strtok_r(NULL, "\r\n", &saveptr);
+}
+
+char* http_response_gen(int status_code, const char* content_type, const char* body) {
+    char* response;
+    snprintf(response, HEADER_SIZE_ESTIMATE + sizeof(body),
+             body);
+    // NOT IMPLEMENTED
+    return response;
 }
 
 void* processClient(void* ptr_fd) {
@@ -36,8 +46,17 @@ void* processClient(void* ptr_fd) {
     }
     if (bytes_received == 0) return NULL;
 
-    // TO DO: Implement a verification that the received message is in the format of an HTTP request
-    // TO DO: Generate an adequate response to the request and send it to client
+    // REQUEST DETAILS
+    char* method;
+    char* path;
+    char* protocol_version;
+    char* mime_type;
+
+    // RESPONSE BUFFER
+    char* response_buf;
+    parseRequest(buffer, bytes_received, method, path, protocol_version);
+    if (strcmp(path, "/") == 0)
+        response_buf = http_response_gen(404, "text/html", "<html><body><h1>404 Not Found</h1></body></html>");
 
     return NULL;
 }
