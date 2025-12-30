@@ -12,6 +12,13 @@
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
 
+struct message_details {
+    char* method;
+    char* path;
+    char* protocol_version;
+    char* mime_type;
+};
+
 void error(void* msg) {
     perror((char*)msg);
     exit(EXIT_FAILURE);
@@ -22,21 +29,36 @@ void parseRequest(char* buffer, ssize_t buf_len, char* method, char* path, char*
     method = strtok_r(buffer, " ", &saveptr);
     path = strtok_r(NULL, " ", &saveptr);
     protocol_version = strtok_r(NULL, "\r\n", &saveptr);
+
+    // ABLE TO IMPLEMENT PARSING OF HEADERS, UNNECESSARY IN OUR CASE
 }
 
-char* http_response_gen(int status_code, const char* content_type, const char* body) {
+const char* get_status_text(int status_code) {
+    // TO IMPLEMENT
+    return "";
+}
+
+char* http_response_gen(char* protocol_version, int status_code, const char* content_type, const char* body) {
     char* response;
     snprintf(response, HEADER_SIZE_ESTIMATE + sizeof(body),
+             "%s %d %s\r\n"
+             "Content-type: %s\r\n"
+             "Content-length: %zu\r\n"
+             "Connection: close\r\n"
+             "\r\n"
+             "%s",
+             protocol_version, status_code, get_status_text(status_code),
+             content_type,
+             sizeof(body),
              body);
-    // NOT IMPLEMENTED
     return response;
 }
 
-void* processClient(void* ptr_fd) {
+void* process_client(void* ptr_fd) {
     int client_fd = *((int*)ptr_fd);
-    char* buffer = malloc(DEFAULT_BUFF_SIZE * sizeof(char));
+    char* buffer = malloc(HEADER_SIZE_ESTIMATE * sizeof(char));
 
-    ssize_t bytes_received = recv(client_fd, buffer, DEFAULT_BUFF_SIZE, 0);
+    ssize_t bytes_received = recv(client_fd, buffer, HEADER_SIZE_ESTIMATE, 0);
     if (bytes_received == -1) {
         perror("Error receiving data");
         close(client_fd);
@@ -47,16 +69,16 @@ void* processClient(void* ptr_fd) {
     if (bytes_received == 0) return NULL;
 
     // REQUEST DETAILS
-    char* method;
-    char* path;
-    char* protocol_version;
-    char* mime_type;
+    struct message_details response_det;
 
     // RESPONSE BUFFER
     char* response_buf;
-    parseRequest(buffer, bytes_received, method, path, protocol_version);
-    if (strcmp(path, "/") == 0)
-        response_buf = http_response_gen(404, "text/html", "<html><body><h1>404 Not Found</h1></body></html>");
+    parseRequest(buffer, bytes_received, response_det.method, response_det.path, response_det.protocol_version);
+    if (strcmp(response_det.path, "/") == 0)
+        response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", "<html><body><h1>404 Not Found</h1></body></html>");
+
+    // TO IMPLEMENT FINDING, OPENING AND SENDING THE APPROPRIATE FILE, AND PARSING ITS MIME TYPE
+    // AND CLOSING THE CONNECTION, ALONG WITH REQUIRED HELPER FUNCTIONS
 
     return NULL;
 }
@@ -106,7 +128,7 @@ int main() {
         // clients from the main thread since the connection breaks when the response is sent,
         // therefore it's memory safe, and network safe (locally)
         pthread_t client_thread;
-        pthread_create(&client_thread, NULL, processClient, (void*)&client_fd);
+        pthread_create(&client_thread, NULL, process_client, (void*)&client_fd);
         pthread_detach(client_thread);
     }
 
