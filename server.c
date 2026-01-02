@@ -12,6 +12,8 @@
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
 
+enum FILE_CODE {TXT, HTML, CSS, JS, CSV, MD};
+
 struct message_details {
     char* method;
     char* path;
@@ -24,22 +26,86 @@ void error(void* msg) {
     exit(EXIT_FAILURE);
 }
 
-void parseRequest(char* buffer, ssize_t buf_len, char* method, char* path, char* protocol_version) {
+void parseRequest(char* buffer, ssize_t buf_len, char** method, char** path, char** protocol_version) {
     char *saveptr; // necessary because of thread safety
-    method = strtok_r(buffer, " ", &saveptr);
-    path = strtok_r(NULL, " ", &saveptr);
-    protocol_version = strtok_r(NULL, "\r\n", &saveptr);
+    *method = strtok_r(buffer, " ", &saveptr);
+    *path = strtok_r(NULL, " ", &saveptr);
+    *protocol_version = strtok_r(NULL, "\r\n", &saveptr);
 
     // ABLE TO IMPLEMENT PARSING OF HEADERS, UNNECESSARY IN OUR CASE
 }
 
 const char* get_status_text(int status_code) {
-    // TO IMPLEMENT
-    return "";
+    switch(status_code) {
+        case 200:
+            return "OK";
+        break;
+        case 400:
+            return "Bad Request";
+        break;
+        case 401:
+            return "Unauthorized";
+        break;
+        case 403:
+            return "Forbidden";
+        break;
+        case 408:
+            return "Request Timeout";
+        break;
+        case 501:
+            return "Not Implemented";
+        break;
+        default:
+            return "";
+    }
+}
+
+int encode_file_extention(char *file_extention) {
+    if (strcmp(file_extention, "txt") == 0)
+        return TXT;
+    if (strcmp(file_extention, "css") == 0)
+        return CSS;
+    if (strcmp(file_extention, "html") == 0)
+        return HTML;
+    if (strcmp(file_extention, "js") == 0)
+        return JS;
+    if (strcmp(file_extention, "md") == 0)
+        return MD;
+    if (strcmp(file_extention, "csv") == 0)
+        return CSV;
+
+    return -1;
+}
+
+const char* get_media_type(char *file_extention) {
+    int file_code = encode_file_extention(file_extention);
+    
+    switch(file_code) {
+        case TXT:
+            return "text/plain";
+        break;
+        case CSS:
+            return "text/css";
+        break;
+        case HTML:
+            return "text/html";
+        break;
+        case JS:
+            return "text/javascript";
+        break;
+        case CSV:
+            return "text/csv";
+        break;
+        case MD:
+            return "text/markdown";
+        break;
+        default:
+            return "type/subtype";
+    }
 }
 
 char* http_response_gen(char* protocol_version, int status_code, const char* content_type, const char* body) {
-    char* response;
+    char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + sizeof(body)));
     snprintf(response, HEADER_SIZE_ESTIMATE + sizeof(body),
              "%s %d %s\r\n"
              "Content-type: %s\r\n"
@@ -62,7 +128,10 @@ void* process_client(void* ptr_fd) {
     if (bytes_received == -1) {
         perror("Error receiving data");
         close(client_fd);
-        free(ptr_fd);
+        //free(ptr_fd);
+        // THIS LINE CREATES AN ERROR
+        // Trying to free the pointer twice
+        // Adding a free at the end of while should be enough and safe
         free(buffer);
         return NULL;
     }
@@ -73,13 +142,18 @@ void* process_client(void* ptr_fd) {
 
     // RESPONSE BUFFER
     char* response_buf;
-    parseRequest(buffer, bytes_received, response_det.method, response_det.path, response_det.protocol_version);
-    if (strcmp(response_det.path, "/") == 0)
+    parseRequest(buffer, bytes_received, &response_det.method, &response_det.path, &response_det.protocol_version);
+    char *root = "/";
+
+    if (strcmp(response_det.path, root) == 0)
         response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", "<html><body><h1>404 Not Found</h1></body></html>");
 
     // TO IMPLEMENT FINDING, OPENING AND SENDING THE APPROPRIATE FILE, AND PARSING ITS MIME TYPE
     // AND CLOSING THE CONNECTION, ALONG WITH REQUIRED HELPER FUNCTIONS
-
+    printf("%s\n",response_buf);
+    close(client_fd);
+    free(response_buf);
+    free(buffer);
     return NULL;
 }
 
@@ -128,7 +202,7 @@ int main() {
         // clients from the main thread since the connection breaks when the response is sent,
         // therefore it's memory safe, and network safe (locally)
         pthread_t client_thread;
-        pthread_create(&client_thread, NULL, process_client, (void*)&client_fd);
+        pthread_create(&client_thread, NULL, process_client, (void*)client_fd);
         pthread_detach(client_thread);
     }
 
