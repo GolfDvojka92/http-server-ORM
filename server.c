@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
+
 #define IP_ADDRESS "192.168.100.3"
 #define PORT 8080
 #define DEFAULT_BUFF_SIZE 2048
@@ -40,6 +41,9 @@ const char* get_status_text(int status_code) {
         case 200:
             return "OK";
         break;
+        case 204:
+            return "No Content";
+        break;
         case 400:
             return "Bad Request";
         break;
@@ -48,6 +52,9 @@ const char* get_status_text(int status_code) {
         break;
         case 403:
             return "Forbidden";
+        break;
+        case 404:
+            return "Not Found";
         break;
         case 408:
             return "Request Timeout";
@@ -60,7 +67,16 @@ const char* get_status_text(int status_code) {
     }
 }
 
-int encode_file_extention(char *file_extention) {
+char *get_file_extention(char* file_name) {
+    char *ext = strrchr(file_name, '.');
+
+    if (ext == NULL)
+        return file_name;
+    
+    return (ext + 1);
+}
+
+int encode_file_extention(char* file_extention) {
     if (strcmp(file_extention, "txt") == 0)
         return TXT;
     if (strcmp(file_extention, "css") == 0)
@@ -77,7 +93,7 @@ int encode_file_extention(char *file_extention) {
     return -1;
 }
 
-const char* get_media_type(char *file_extention) {
+char* get_media_type(char *file_extention) {
     int file_code = encode_file_extention(file_extention);
     
     switch(file_code) {
@@ -104,9 +120,16 @@ const char* get_media_type(char *file_extention) {
     }
 }
 
+char* relative_path(char* file_path) {
+    if (*file_path == '/')
+        file_path++;
+
+    return file_path;
+}
+
 char* http_response_gen(char* protocol_version, int status_code, const char* content_type, const char* body) {
-    char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + sizeof(body)));
-    snprintf(response, HEADER_SIZE_ESTIMATE + sizeof(body),
+    char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + strlen(body)));
+    snprintf(response, HEADER_SIZE_ESTIMATE + strlen(body),
              "%s %d %s\r\n"
              "Content-type: %s\r\n"
              "Content-length: %zu\r\n"
@@ -115,7 +138,7 @@ char* http_response_gen(char* protocol_version, int status_code, const char* con
              "%s",
              protocol_version, status_code, get_status_text(status_code),
              content_type,
-             sizeof(body),
+             strlen(body),
              body);
     return response;
 }
@@ -146,11 +169,41 @@ void* process_client(void* ptr_fd) {
     char *root = "/";
 
     if (strcmp(response_det.path, root) == 0)
-        response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", "<html><body><h1>404 Not Found</h1></body></html>");
+        response_buf = http_response_gen(response_det.protocol_version, 403, "text/html", get_status_text(403));
+    else {
 
-    // TO IMPLEMENT FINDING, OPENING AND SENDING THE APPROPRIATE FILE, AND PARSING ITS MIME TYPE
-    // AND CLOSING THE CONNECTION, ALONG WITH REQUIRED HELPER FUNCTIONS
-    printf("%s\n",response_buf);
+        FILE *searched_file = fopen(relative_path(response_det.path), "r");
+        if (searched_file == NULL) {
+            //FILE NOT FOUND
+            response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", get_status_text(404));
+        }
+        else {
+            //PARSING MIME TYPE
+            char *media_type = get_media_type(get_file_extention(response_det.path));
+
+            //READING FILE CONTENT
+            fseek(searched_file, 0, SEEK_END);
+            long file_byte_count = ftell(searched_file);
+            rewind(searched_file);
+
+            char *file_buf = malloc((file_byte_count + 1) * sizeof(char));
+            fread(file_buf, sizeof(char), file_byte_count, searched_file);
+            file_buf[file_byte_count] = '\0';
+
+            response_buf = http_response_gen(response_det.protocol_version, 200, media_type, file_buf);
+
+            free(file_buf);
+            fclose(searched_file);
+        }
+    }
+    
+    //SENDING HTTP RESPONSE
+    if (send(client_fd, response_buf, strlen(response_buf), 0) == -1)
+        printf("Error sending file to client with socket: %d\n", client_fd);
+
+
+    //CLOSING THE CONNECTION
+    printf("Closing connection to client with socket: %d\n", client_fd);
     close(client_fd);
     free(response_buf);
     free(buffer);
