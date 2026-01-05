@@ -40,28 +40,28 @@ const char* get_status_text(int status_code) {
     switch(status_code) {
         case 200:
             return "OK";
-        break;
+        
         case 204:
             return "No Content";
-        break;
+        
         case 400:
             return "Bad Request";
-        break;
+        
         case 401:
             return "Unauthorized";
-        break;
+        
         case 403:
             return "Forbidden";
-        break;
+        
         case 404:
             return "Not Found";
-        break;
+        
         case 408:
             return "Request Timeout";
-        break;
+        
         case 501:
             return "Not Implemented";
-        break;
+        
         default:
             return "";
     }
@@ -127,6 +127,21 @@ char* relative_path(char* file_path) {
     return file_path;
 }
 
+char* gen_html_response(int status_code) {
+    char *front_html = "<html><body><h1>";
+    const char *status_text = get_status_text(status_code);
+    char *back_html = "</h1></body></html>";
+    // status_code is length 3, 1 space, status text
+    // + 1 for '\0'
+    int len = strlen(front_html) + 4 + strlen(status_text) + strlen(back_html) + 1;
+    char *html_text = malloc(len * sizeof(char));
+    
+    snprintf(html_text, len, "%s%d %s%s", front_html, status_code, status_text, back_html);
+
+    printf("HTML RESPONSE: %s\n", html_text);
+    return html_text;
+}
+
 char* http_response_gen(char* protocol_version, int status_code, const char* content_type, const char* body) {
     char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + strlen(body)));
     snprintf(response, HEADER_SIZE_ESTIMATE + strlen(body),
@@ -168,14 +183,19 @@ void* process_client(void* ptr_fd) {
     parseRequest(buffer, bytes_received, &response_det.method, &response_det.path, &response_det.protocol_version);
     char *root = "/";
 
-    if (strcmp(response_det.path, root) == 0)
-        response_buf = http_response_gen(response_det.protocol_version, 403, "text/html", get_status_text(403));
+    if (strcmp(response_det.path, root) == 0) {
+        char *html_text = gen_html_response(403);
+        response_buf = http_response_gen(response_det.protocol_version, 403, "text/html", html_text);
+        free(html_text);
+    }
     else {
 
         FILE *searched_file = fopen(relative_path(response_det.path), "r");
         if (searched_file == NULL) {
             //FILE NOT FOUND
-            response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", get_status_text(404));
+            char *html_text = gen_html_response(404);
+            response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", html_text);
+            free(html_text);
         }
         else {
             //PARSING MIME TYPE
