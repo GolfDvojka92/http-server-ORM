@@ -10,7 +10,7 @@
 #define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
-#define MIME_TYPES_COUNT 7
+#define MIME_TYPES_COUNT 8
 
 #define ERR_403 "<html><body><h1>403 FORBIDDEN</h1></body></html>"
 #define ERR_404 "<html><body><h1>404 NOT FOUND</h1></body></html>"
@@ -46,6 +46,7 @@ const struct mime_map types[] = {
     {"js", "text/javascipt"},
     {"md", "text/markdown"},
     {"csv", "text/csv"},
+    {"png", "image/png"},
     {"", "application/octet-stream"}
 };
 
@@ -85,17 +86,20 @@ const char* get_status_text(int status_code) {
 
 
 const char* get_mime_type(char *file_name) {
-    char *ext = strrchr(file_name, '.');
+    // FINDS THE LAST INSTACE OF A DOT AND RETURNS A POINTER TO IT
+    char *ext = strrchr(file_name, '.') + 1;
 
+    // IF NO POINTS ARE FOUND, IT'S A DEFAULT OCTET STREAM
     if (ext == NULL)
         return "application/octet-stream";
 
+    // O(n) search through the implemented mime types in an array of struct mime_map
+    // if not implemented, returns octet stream
     int idx;
-    for (idx = 0; idx < MIME_TYPES_COUNT; idx++) {
+    for (idx = 0; idx < MIME_TYPES_COUNT - 1; idx++) {
         if (strcmp(types[idx].ext, ext) == 0)
             break;
     }
-    if (idx == MIME_TYPES_COUNT) idx--;
     return types[idx].type;
 }
 
@@ -142,6 +146,7 @@ void* process_client(void* ptr_fd) {
     int client_fd = *((int*)ptr_fd);
     char* buffer = malloc(HEADER_SIZE_ESTIMATE * sizeof(char));
 
+    // RECIEVING THE REQUEST FROM CLIENT
     ssize_t bytes_received = recv(client_fd, buffer, HEADER_SIZE_ESTIMATE, 0);
     if (bytes_received == -1) {
         perror("Error receiving data");
@@ -152,9 +157,9 @@ void* process_client(void* ptr_fd) {
     }
     if (bytes_received == 0) return NULL;
 
-    // REQUEST DETAILS
+    // PARSING REQUEST LINE
     char* saveptr;
-    char* request_line = strtok_r(buffer, "\r\n", &saveptr);
+    char* request_line = strtok_r(buffer, "\r\n", &saveptr);        // this saves the rest of the buffer into the saveptr, allows for parsing of the headers in the future
 
     struct request_line response;
     parse_request(request_line, bytes_received, &response);
@@ -169,7 +174,7 @@ void* process_client(void* ptr_fd) {
     }
 
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response.path), "r");
+    FILE *searched_file = fopen(relative_path(response.path), "rb");
     if (searched_file == NULL) {
         //FILE NOT FOUND
         response_buf = generate_response(response.protocol_version, 404, "text/html", ERR_404);
