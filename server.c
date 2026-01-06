@@ -154,23 +154,23 @@ void* process_client(void* ptr_fd) {
     char* saveptr;
     char* request_line = strtok_r(buffer, "\r\n", &saveptr);
 
-    struct message* response;
-    parse_request(request_line, bytes_received, response);
+    struct message response;
+    parse_request(request_line, bytes_received, &response);
 
     // RESPONSE BUFFER
     char* response_buf;
 
-    if (strcmp(response->req_line->path, "/") == 0) {
-        response_buf = generate_response(response->req_line->protocol_version, 403, "text/html", ERR_403);
+    if (strcmp(response.req_line->path, "/") == 0) {
+        response_buf = generate_response(response.req_line->protocol_version, 403, "text/html", ERR_403);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
 
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response->req_line->path), "r");
+    FILE *searched_file = fopen(relative_path(response.req_line->path), "r");
     if (searched_file == NULL) {
         //FILE NOT FOUND
-        response_buf = generate_response(response->req_line->protocol_version, 404, "text/html", ERR_404);
+        response_buf = generate_response(response.req_line->protocol_version, 404, "text/html", ERR_404);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
@@ -186,8 +186,8 @@ void* process_client(void* ptr_fd) {
     fread(file_buf, sizeof(char), file_byte_count, searched_file);
     file_buf[file_byte_count] = '\0';
 
-    response_buf = generate_response(response->req_line->protocol_version, 200, get_mime_type(response->req_line->path), file_buf);
-    if (strcmp(response->req_line->method, "HEAD") == 0) {
+    response_buf = generate_response(response.req_line->protocol_version, 200, get_mime_type(response.req_line->path), file_buf);
+    if (strcmp(response.req_line->method, "HEAD") == 0) {
         *(strrchr(response_buf, '\n') + 1) = '\0';      // evil pointer magic
     }
 
