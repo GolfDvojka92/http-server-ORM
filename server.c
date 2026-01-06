@@ -10,6 +10,7 @@
 #define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
+#define MIME_TYPES_COUNT 7
 
 #define ERR_403 "<html><body><h1>403 FORBIDDEN</h1></body></html>"
 #define ERR_404 "<html><body><h1>404 NOT FOUND</h1></body></html>"
@@ -45,7 +46,7 @@ const struct mime_map types[] = {
     {"js", "text/javascipt"},
     {"md", "text/markdown"},
     {"csv", "text/csv"},
-    {NULL, "application/octet-stream"}
+    {"", "application/octet-stream"}
 };
 
 void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
@@ -90,10 +91,11 @@ const char* get_mime_type(char *file_name) {
         return "application/octet-stream";
 
     int idx;
-    for (idx = 0; idx < sizeof(types) / sizeof(types[0]); idx++) {
+    for (idx = 0; idx < MIME_TYPES_COUNT; idx++) {
         if (strcmp(types[idx].ext, ext) == 0)
             break;
     }
+    if (idx == MIME_TYPES_COUNT) idx--;
     return types[idx].type;
 }
 
