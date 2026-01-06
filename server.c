@@ -6,20 +6,26 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-
-#define IP_ADDRESS "192.168.100.3"
 #define PORT 8080
 #define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
 
-enum FILE_CODE {TXT, HTML, CSS, JS, CSV, MD};
+#define ERR_403 "<html><body><h1>403 FORBIDDEN</h1></body></html>"
+#define ERR_404 "<html><body><h1>404 NOT FOUND</h1></body></html>"
+#define ERR_501 "<html><body><h1>501 NOT IMPLEMENTED</h1></body></html>"
 
-struct message_details {
+struct message {
+    struct request_line* req_line;
+    // struct map* headers;
+    char* body;
+};
+
+struct request_line {
     char* method;
     char* path;
     char* protocol_version;
-    char* mime_type;
+    
 };
 
 void error(void* msg) {
@@ -27,11 +33,28 @@ void error(void* msg) {
     exit(EXIT_FAILURE);
 }
 
-void parseRequest(char* buffer, ssize_t buf_len, char** method, char** path, char** protocol_version) {
+struct mime_map {
+    const char* ext;
+    const char* type;
+};
+
+const struct mime_map types[] = {
+    {"txt", "text/plain"},
+    {"css", "text/css"},
+    {"html", "text/html"},
+    {"js", "text/javascipt"},
+    {"md", "text/markdown"},
+    {"csv", "text/csv"},
+    {NULL, "application/octet-stream"}
+};
+
+void parse_request(char* buffer, ssize_t buf_len, struct message* msg) {
     char *saveptr; // necessary because of thread safety
-    *method = strtok_r(buffer, " ", &saveptr);
-    *path = strtok_r(NULL, " ", &saveptr);
-    *protocol_version = strtok_r(NULL, "\r\n", &saveptr);
+    msg->req_line->method = strtok_r(buffer, " ", &saveptr);
+    msg->req_line->path = strtok_r(NULL, " ", &saveptr);
+    // TOKENIZES THE PROTOCOL VERSION BY THE SLASH, saveptr POINTS TO ONLY THE NUMBERS AFTER IT
+    strtok_r(NULL, "/", &saveptr);
+    msg->req_line->protocol_version = saveptr;
 
     // ABLE TO IMPLEMENT PARSING OF HEADERS, UNNECESSARY IN OUR CASE
 }
@@ -40,84 +63,38 @@ const char* get_status_text(int status_code) {
     switch(status_code) {
         case 200:
             return "OK";
-        
         case 204:
             return "No Content";
-        
         case 400:
             return "Bad Request";
-        
         case 401:
             return "Unauthorized";
-        
         case 403:
             return "Forbidden";
-        
         case 404:
             return "Not Found";
-        
         case 408:
             return "Request Timeout";
-        
         case 501:
             return "Not Implemented";
-        
         default:
             return "";
     }
 }
 
-char *get_file_extention(char* file_name) {
+
+const char* get_mime_type(char *file_name) {
     char *ext = strrchr(file_name, '.');
 
     if (ext == NULL)
-        return file_name;
-    
-    return (ext + 1);
-}
+        return "application/octet-stream";
 
-int encode_file_extention(char* file_extention) {
-    if (strcmp(file_extention, "txt") == 0)
-        return TXT;
-    if (strcmp(file_extention, "css") == 0)
-        return CSS;
-    if (strcmp(file_extention, "html") == 0)
-        return HTML;
-    if (strcmp(file_extention, "js") == 0)
-        return JS;
-    if (strcmp(file_extention, "md") == 0)
-        return MD;
-    if (strcmp(file_extention, "csv") == 0)
-        return CSV;
-
-    return -1;
-}
-
-char* get_media_type(char *file_extention) {
-    int file_code = encode_file_extention(file_extention);
-    
-    switch(file_code) {
-        case TXT:
-            return "text/plain";
-        break;
-        case CSS:
-            return "text/css";
-        break;
-        case HTML:
-            return "text/html";
-        break;
-        case JS:
-            return "text/javascript";
-        break;
-        case CSV:
-            return "text/csv";
-        break;
-        case MD:
-            return "text/markdown";
-        break;
-        default:
-            return "type/subtype";
+    int idx;
+    for (idx = 0; idx < sizeof(types) / sizeof(types[0]); idx++) {
+        if (strcmp(types[idx].ext, ext) == 0)
+            break;
     }
+    return types[idx].type;
 }
 
 char* relative_path(char* file_path) {
@@ -127,26 +104,14 @@ char* relative_path(char* file_path) {
     return file_path;
 }
 
-char* gen_html_response(int status_code) {
-    char *front_html = "<html><body><h1>";
-    const char *status_text = get_status_text(status_code);
-    char *back_html = "</h1></body></html>";
-    // status_code is length 3, 1 space, status text
-    // + 1 for '\0'
-    int len = strlen(front_html) + 4 + strlen(status_text) + strlen(back_html) + 1;
-    char *html_text = malloc(len * sizeof(char));
-    
-    snprintf(html_text, len, "%s%d %s%s", front_html, status_code, status_text, back_html);
+//struct message* generate_response(struct message* request)
+//char* msg_to_string(struct message* response)
 
-    printf("HTML RESPONSE: %s\n", html_text);
-    return html_text;
-}
-
-char* http_response_gen(char* protocol_version, int status_code, const char* content_type, const char* body) {
+char* generate_response(char* protocol_version, int status_code, const char* content_type, const char* body) {
     char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + strlen(body)));
     snprintf(response, HEADER_SIZE_ESTIMATE + strlen(body),
-             "%s %d %s\r\n"
-             "Content-type: %s\r\n"
+             "HTTP/%s %d %s\r\n"
+             "Content-type: %s; charset=UTF-8\r\n"
              "Content-length: %zu\r\n"
              "Connection: close\r\n"
              "\r\n"
@@ -158,6 +123,19 @@ char* http_response_gen(char* protocol_version, int status_code, const char* con
     return response;
 }
 
+void send_response(int client_fd, char* response_buf, char* buffer, void* ptr_fd) {
+    //SENDING HTTP RESPONSE
+    if (send(client_fd, response_buf, strlen(response_buf), 0) == -1)
+        printf("Error sending file to client with socket: %d\n", client_fd);
+
+    //CLOSING THE CONNECTION
+    printf("Closing connection to client with socket: %d\n", client_fd);
+    close(client_fd);
+    free(response_buf);
+    free(buffer);
+    free(ptr_fd);
+}
+
 void* process_client(void* ptr_fd) {
     int client_fd = *((int*)ptr_fd);
     char* buffer = malloc(HEADER_SIZE_ESTIMATE * sizeof(char));
@@ -166,67 +144,57 @@ void* process_client(void* ptr_fd) {
     if (bytes_received == -1) {
         perror("Error receiving data");
         close(client_fd);
-        //free(ptr_fd);
-        // THIS LINE CREATES AN ERROR
-        // Trying to free the pointer twice
-        // Adding a free at the end of while should be enough and safe
+        free(ptr_fd);
         free(buffer);
         return NULL;
     }
     if (bytes_received == 0) return NULL;
 
     // REQUEST DETAILS
-    struct message_details response_det;
+    char* saveptr;
+    char* request_line = strtok_r(buffer, "\r\n", &saveptr);
+
+    struct message* response;
+    parse_request(request_line, bytes_received, response);
 
     // RESPONSE BUFFER
     char* response_buf;
-    parseRequest(buffer, bytes_received, &response_det.method, &response_det.path, &response_det.protocol_version);
-    char *root = "/";
 
-    if (strcmp(response_det.path, root) == 0) {
-        char *html_text = gen_html_response(403);
-        response_buf = http_response_gen(response_det.protocol_version, 403, "text/html", html_text);
-        free(html_text);
+    if (strcmp(response->req_line->path, "/") == 0) {
+        response_buf = generate_response(response->req_line->protocol_version, 403, "text/html", ERR_403);
+        send_response(client_fd, response_buf, buffer, ptr_fd);
+        return NULL;
     }
-    else {
 
-        FILE *searched_file = fopen(relative_path(response_det.path), "r");
-        if (searched_file == NULL) {
-            //FILE NOT FOUND
-            char *html_text = gen_html_response(404);
-            response_buf = http_response_gen(response_det.protocol_version, 404, "text/html", html_text);
-            free(html_text);
-        }
-        else {
-            //PARSING MIME TYPE
-            char *media_type = get_media_type(get_file_extention(response_det.path));
-
-            //READING FILE CONTENT
-            fseek(searched_file, 0, SEEK_END);
-            long file_byte_count = ftell(searched_file);
-            rewind(searched_file);
-
-            char *file_buf = malloc((file_byte_count + 1) * sizeof(char));
-            fread(file_buf, sizeof(char), file_byte_count, searched_file);
-            file_buf[file_byte_count] = '\0';
-
-            response_buf = http_response_gen(response_det.protocol_version, 200, media_type, file_buf);
-
-            free(file_buf);
-            fclose(searched_file);
-        }
+    // OPENING THE FILE
+    FILE *searched_file = fopen(relative_path(response->req_line->path), "r");
+    if (searched_file == NULL) {
+        //FILE NOT FOUND
+        response_buf = generate_response(response->req_line->protocol_version, 404, "text/html", ERR_404);
+        send_response(client_fd, response_buf, buffer, ptr_fd);
+        return NULL;
     }
-    
-    //SENDING HTTP RESPONSE
-    if (send(client_fd, response_buf, strlen(response_buf), 0) == -1)
-        printf("Error sending file to client with socket: %d\n", client_fd);
+
+    //READING FILE CONTENT
+    fseek(searched_file, 0, SEEK_END);
+    long file_byte_count = ftell(searched_file);
+    rewind(searched_file);
 
 
-    //CLOSING THE CONNECTION
-    printf("Closing connection to client with socket: %d\n", client_fd);
-    close(client_fd);
-    free(response_buf);
-    free(buffer);
+    //SETTING UP FILE BUFFER FOR SENDING
+    char *file_buf = malloc((file_byte_count + 1) * sizeof(char));
+    fread(file_buf, sizeof(char), file_byte_count, searched_file);
+    file_buf[file_byte_count] = '\0';
+
+    response_buf = generate_response(response->req_line->protocol_version, 200, get_mime_type(response->req_line->path), file_buf);
+    if (strcmp(response->req_line->method, "HEAD") == 0) {
+        *(strrchr(response_buf, '\n') + 1) = '\0';      // evil pointer magic
+    }
+
+    free(file_buf);
+    fclose(searched_file);
+
+    send_response(client_fd, response_buf, buffer, ptr_fd);
     return NULL;
 }
 
