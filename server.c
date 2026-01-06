@@ -48,13 +48,13 @@ const struct mime_map types[] = {
     {NULL, "application/octet-stream"}
 };
 
-void parse_request(char* buffer, ssize_t buf_len, struct message* msg) {
+void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
     char *saveptr; // necessary because of thread safety
-    msg->req_line->method = strtok_r(buffer, " ", &saveptr);
-    msg->req_line->path = strtok_r(NULL, " ", &saveptr);
+    msg->method = strtok_r(buffer, " ", &saveptr);
+    msg->path = strtok_r(NULL, " ", &saveptr);
     // TOKENIZES THE PROTOCOL VERSION BY THE SLASH, saveptr POINTS TO ONLY THE NUMBERS AFTER IT
     strtok_r(NULL, "/", &saveptr);
-    msg->req_line->protocol_version = saveptr;
+    msg->protocol_version = saveptr;
 
     // ABLE TO IMPLEMENT PARSING OF HEADERS, UNNECESSARY IN OUR CASE
 }
@@ -154,23 +154,23 @@ void* process_client(void* ptr_fd) {
     char* saveptr;
     char* request_line = strtok_r(buffer, "\r\n", &saveptr);
 
-    struct message response;
+    struct request_line response;
     parse_request(request_line, bytes_received, &response);
 
     // RESPONSE BUFFER
     char* response_buf;
 
-    if (strcmp(response.req_line->path, "/") == 0) {
-        response_buf = generate_response(response.req_line->protocol_version, 403, "text/html", ERR_403);
+    if (strcmp(response.path, "/") == 0) {
+        response_buf = generate_response(response.protocol_version, 403, "text/html", ERR_403);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
 
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response.req_line->path), "r");
+    FILE *searched_file = fopen(relative_path(response.path), "r");
     if (searched_file == NULL) {
         //FILE NOT FOUND
-        response_buf = generate_response(response.req_line->protocol_version, 404, "text/html", ERR_404);
+        response_buf = generate_response(response.protocol_version, 404, "text/html", ERR_404);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
@@ -186,8 +186,8 @@ void* process_client(void* ptr_fd) {
     fread(file_buf, sizeof(char), file_byte_count, searched_file);
     file_buf[file_byte_count] = '\0';
 
-    response_buf = generate_response(response.req_line->protocol_version, 200, get_mime_type(response.req_line->path), file_buf);
-    if (strcmp(response.req_line->method, "HEAD") == 0) {
+    response_buf = generate_response(response.protocol_version, 200, get_mime_type(response.path), file_buf);
+    if (strcmp(response.method, "HEAD") == 0) {
         *(strrchr(response_buf, '\n') + 1) = '\0';      // evil pointer magic
     }
 
