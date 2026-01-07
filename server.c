@@ -201,6 +201,7 @@ void* process_client(void* ptr_fd) {
 }
 
 int main() {
+    // SERVER INFORMATION
     int server_fd;
     struct sockaddr_in server_addr;
 
