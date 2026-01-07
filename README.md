@@ -19,7 +19,8 @@ Connection: close
 
 Starts a locally hosted HTTP server that's capable of receiving GET and HEAD requests, formatted according to the RFC2616 referencing the HTTP/1.1 version of the protocol. It's capable of displaying only the most common types of text files, and requests for an unsupported file type are responded to with an application/octet-stream MIME type, meaning they are downloaded.
 
-## Starting the server HTTP protocol uses TCP as the communication protocol. In C this means we have to create a server socket using the TCP standard (SOCK_STREAM), bind it to our IP address using an open port, all of which are stored inside the server_addr variable. After binding the socket to the IP, we have to call listen to start listening for connections. ``` int server_fd; struct sockaddr_in server_addr;
+## Starting the server
+HTTP protocol uses TCP as the communication protocol. In C this means we have to create a server socket using the TCP standard (SOCK_STREAM), bind it to our IP address using an open port, all of which are stored inside the server_addr variable. After binding the socket to the IP, we have to call listen to start listening for connections. ``` int server_fd; struct sockaddr_in server_addr;
 
     // SOCKET CREATION
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
