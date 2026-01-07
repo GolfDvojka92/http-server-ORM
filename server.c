@@ -46,7 +46,6 @@ const struct mime_map types[] = {
     {"js", "text/javascipt"},
     {"md", "text/markdown"},
     {"csv", "text/csv"},
-    {"png", "image/png"},
     {"", "application/octet-stream"}
 };
 
@@ -94,7 +93,7 @@ const char* get_mime_type(char *file_name) {
         return "application/octet-stream";
 
     // O(n) search through the implemented mime types in an array of struct mime_map
-    // if not implemented, returns octet stream
+    // if not implemented, returns octet-stream
     int idx;
     for (idx = 0; idx < MIME_TYPES_COUNT - 1; idx++) {
         if (strcmp(types[idx].ext, ext) == 0)
