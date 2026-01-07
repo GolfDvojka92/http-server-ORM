@@ -10,7 +10,7 @@
 #define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
-#define MIME_TYPES_COUNT 8
+#define MIME_TYPES_COUNT 7
 
 #define ERR_403 "<html><body><h1>403 FORBIDDEN</h1></body></html>"
 #define ERR_404 "<html><body><h1>404 NOT FOUND</h1></body></html>"
@@ -112,19 +112,19 @@ char* relative_path(char* file_path) {
 //struct message* generate_response(struct message* request)
 //char* msg_to_string(struct message* response)
 
-char* generate_response(char* protocol_version, int status_code, const char* content_type, const char* body) {
+char* generate_response(struct request_line req_line, int status_code, const char* content_type, const char* body) {
     char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + strlen(body)));
     snprintf(response, HEADER_SIZE_ESTIMATE + strlen(body),
              "HTTP/%s %d %s\r\n"
              "Content-type: %s; charset=UTF-8\r\n"
              "Content-length: %zu\r\n"
              "Connection: close\r\n"
-             "\r\n"
-             "%s",
-             protocol_version, status_code, get_status_text(status_code),
+             "\r\n",
+             req_line.protocol_version, status_code, get_status_text(status_code),
              content_type,
-             strlen(body),
-             body);
+             strlen(body));
+    if (strcmp(req_line.method, "GET") == 0)
+        strcat(response, body);
     return response;
 }
 
@@ -167,7 +167,7 @@ void* process_client(void* ptr_fd) {
     char* response_buf;
 
     if (strcmp(response.path, "/") == 0) {
-        response_buf = generate_response(response.protocol_version, 403, "text/html", ERR_403);
+        response_buf = generate_response(response, 403, "text/html", ERR_403);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
@@ -176,7 +176,7 @@ void* process_client(void* ptr_fd) {
     FILE *searched_file = fopen(relative_path(response.path), "rb");
     if (searched_file == NULL) {
         //FILE NOT FOUND
-        response_buf = generate_response(response.protocol_version, 404, "text/html", ERR_404);
+        response_buf = generate_response(response, 404, "text/html", ERR_404);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
@@ -188,14 +188,10 @@ void* process_client(void* ptr_fd) {
 
 
     //SETTING UP FILE BUFFER FOR SENDING
-    char *file_buf = malloc((file_byte_count + 1) * sizeof(char));
+    char *file_buf = malloc(file_byte_count);
     fread(file_buf, sizeof(char), file_byte_count, searched_file);
-    file_buf[file_byte_count] = '\0';
 
-    response_buf = generate_response(response.protocol_version, 200, get_mime_type(response.path), file_buf);
-    if (strcmp(response.method, "HEAD") == 0) {
-        *(strrchr(response_buf, '\n') + 1) = '\0';      // evil pointer magic
-    }
+    response_buf = generate_response(response, 200, get_mime_type(response.path), file_buf);
 
     free(file_buf);
     fclose(searched_file);
