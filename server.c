@@ -10,7 +10,6 @@
 #define DEFAULT_BUFF_SIZE 2048
 #define MAX_QUEUE_SIZE 10
 #define HEADER_SIZE_ESTIMATE 256
-#define MIME_TYPES_COUNT 7
 
 #define ERR_403 "<html><body><h1>403 FORBIDDEN</h1></body></html>"
 #define ERR_404 "<html><body><h1>404 NOT FOUND</h1></body></html>"
@@ -83,6 +82,7 @@ const char* get_status_text(int status_code) {
     }
 }
 
+#define MIME_TYPES_COUNT sizeof(types) / sizeof(struct mime_map)
 
 const char* get_mime_type(char *file_name) {
     // FINDS THE LAST INSTACE OF A DOT AND RETURNS A POINTER TO IT
