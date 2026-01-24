@@ -166,6 +166,7 @@ void* process_client(void* ptr_fd) {
     // RESPONSE BUFFER
     char* response_buf;
 
+    // DENYING ACCESS TO ROOT
     if (strcmp(response.path, "/") == 0) {
         response_buf = generate_response(response, 403, "text/html", ERR_403);
         send_response(client_fd, response_buf, buffer, ptr_fd);
@@ -238,6 +239,7 @@ int main() {
         // ACCEPTING CLIENT CONNECTION
         if ((*client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_length)) == -1) {
             perror("Client couldn't be accepted");
+            free(client_fd);
             continue;
         }
 
