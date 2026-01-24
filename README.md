@@ -107,6 +107,8 @@ void* process_client(void* ptr_fd) {
     if (bytes_received == 0) return NULL;
 ```
 
+### Parsing the request line
+
 After that, we have to parse the request. First we separate the request line from the headers using ``strtok_r()``, then we forward the request line to the ``parse_request()`` function.
 
 ```
@@ -149,6 +151,8 @@ Upon parsing the request line, we start handling the HTTP request. The server fo
     }
 ```
 
+### Opening the requested file
+
 After that, it opens the requested file, and if it fails to do so, we return a 404.
 
 ```
@@ -177,6 +181,8 @@ If the requested file is found, it calculates its size using ``ftell()`` and sto
 
     response_buf = generate_response(response, 200, get_mime_type(response.path), file_buf);
 ```
+
+### Generating HTTP response
 
 The ``generate_response()`` function returns a pointer to the finalized response buffer, ready to be sent to the client. The body is catenated to the response depending on the request method.
 
@@ -208,6 +214,8 @@ The server frees all the used up memory necessary for the creation of the respon
     return NULL;
 }
 ```
+
+### Sending the response
 
 The ``send_response()`` function, in addition to sending the HTTP response to the client, closes the connection and frees up the remaining dynamically allocated memory.
 
