@@ -88,4 +88,140 @@ while (1) {
 }
 ```
 
+The threads are calling the process_client function. First we allocate the memory required for the request buffer, then we fill the buffer by receiving the HTTP request from the client.
 
+```
+void* process_client(void* ptr_fd) {
+    int client_fd = *((int*)ptr_fd);
+    char* buffer = malloc(HEADER_SIZE_ESTIMATE * sizeof(char));
+
+    // RECIEVING THE REQUEST FROM CLIENT
+    ssize_t bytes_received = recv(client_fd, buffer, HEADER_SIZE_ESTIMATE, 0);
+    if (bytes_received == -1) {
+        perror("Error receiving data");
+        close(client_fd);
+        free(ptr_fd);
+        free(buffer);
+        return NULL;
+    }
+    if (bytes_received == 0) return NULL;
+```
+
+After that, we have to parse the request. First we separate the request line from the headers using ``strtok_r()``, then we forward the request line to the ``parse_request()`` function.
+
+```
+    // PARSING REQUEST LINE
+    char* saveptr;
+    char* request_line = strtok_r(buffer, "\r\n", &saveptr);        // this saves the rest of the buffer into the saveptr, allows for parsing of the headers in the future
+
+    struct request_line response;
+    parse_request(request_line, bytes_received, &response);
+```
+
+The ``parse_request()`` function separates the forwarded request line into the 3 segments, and fills the forwarded struct with them. If parsing of the headers were to be 
+required, it would be easily done just by forwarding the entire request buffer, and filling a hash map with all of the headers from the request, however, this 
+project in particular implements only ``GET`` and ``HEAD`` HTTP methods, to which only the request line is important.
+
+```
+void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
+    char *saveptr; // necessary because of thread safety
+    msg->method = strtok_r(buffer, " ", &saveptr);
+    msg->path = strtok_r(NULL, " ", &saveptr);
+    // TOKENIZES THE PROTOCOL VERSION BY THE SLASH, saveptr POINTS TO ONLY THE NUMBERS AFTER IT
+    strtok_r(NULL, "/", &saveptr);
+    msg->protocol_version = saveptr;
+
+    // ABLE TO IMPLEMENT PARSING OF HEADERS, UNNECESSARY IN OUR CASE
+}
+```
+
+Upon parsing the request line, we start handling the HTTP request. The server forbids access to the root directory.
+
+```
+    // RESPONSE BUFFER
+    char* response_buf;
+
+    // DENYING ACCESS TO ROOT
+    if (strcmp(response.path, "/") == 0) {
+        response_buf = generate_response(response, 403, "text/html", ERR_403);
+        send_response(client_fd, response_buf, buffer, ptr_fd);
+        return NULL;
+    }
+```
+
+After that, it opens the requested file, and if it fails to do so, we return a 404.
+
+```
+    // OPENING THE FILE
+    FILE *searched_file = fopen(relative_path(response.path), "rb");
+    if (searched_file == NULL) {
+        //FILE NOT FOUND
+        response_buf = generate_response(response, 404, "text/html", ERR_404);
+        send_response(client_fd, response_buf, buffer, ptr_fd);
+        return NULL;
+    }
+```
+
+If the requested file is found, it calculates its size using ``ftell()`` and stores it into a long. The server then fills a buffer with the contents of the file, and forwards it to the ``generate_response()`` function, filling the response buffer.
+
+```
+    //READING FILE CONTENT
+    fseek(searched_file, 0, SEEK_END);
+    long file_byte_count = ftell(searched_file);
+    rewind(searched_file);
+
+
+    //FILLING UP FILE BUFFER FOR SENDING
+    char *file_buf = malloc(file_byte_count);
+    fread(file_buf, sizeof(char), file_byte_count, searched_file);
+
+    response_buf = generate_response(response, 200, get_mime_type(response.path), file_buf);
+```
+
+The ``generate_response()`` function returns a pointer to the finalized response buffer, ready to be sent to the client. The body is catenated to the response depending on the request method.
+
+```
+char* generate_response(struct request_line req_line, int status_code, const char* content_type, const char* body) {
+    char* response = malloc(sizeof(char) * (HEADER_SIZE_ESTIMATE + strlen(body)));
+    snprintf(response, HEADER_SIZE_ESTIMATE + strlen(body),
+             "HTTP/%s %d %s\r\n"
+             "Content-type: %s; charset=UTF-8\r\n"
+             "Content-length: %zu\r\n"
+             "Connection: close\r\n"
+             "\r\n",
+             req_line.protocol_version, status_code, get_status_text(status_code),
+             content_type,
+             strlen(body));
+    if (strcmp(req_line.method, "GET") == 0)
+        strcat(response, body);
+    return response;
+}
+```
+
+The server frees all the used up memory necessary for the creation of the response buffer, and sends the response back to the client using the ``send_response()`` function.
+
+```
+    free(file_buf);
+    fclose(searched_file);
+
+    send_response(client_fd, response_buf, buffer, ptr_fd);
+    return NULL;
+}
+```
+
+The ``send_response()`` function, in addition to sending the HTTP response to the client, closes the connection and frees up the remaining dynamically allocated memory.
+
+```
+void send_response(int client_fd, char* response_buf, char* buffer, void* ptr_fd) {
+    //SENDING HTTP RESPONSE
+    if (send(client_fd, response_buf, strlen(response_buf), 0) == -1)
+        printf("Error sending file to client with socket: %d\n", client_fd);
+
+    //CLOSING THE CONNECTION
+    printf("Closing connection to client with socket: %d\n", client_fd);
+    close(client_fd);
+    free(response_buf);
+    free(buffer);
+    free(ptr_fd);
+}
+```
