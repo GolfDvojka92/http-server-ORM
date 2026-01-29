@@ -23,7 +23,13 @@ Starts a locally hosted HTTP server that's capable of receiving GET and HEAD req
 
 ### Building
 
-In the directory where you wish to store the server files, clone the repo by running ``git clone https://github.com/GolfDvojka92/http-server-ORM`` through the terminal. While in the terminal, from the root directory of the project run ``cmake -B build`` to generate build files. After that, run ``cmake --build build`` to compile the project.
+In the directory where you wish to store the server files, clone the repo:
+
+```
+git clone https://github.com/GolfDvojka92/http-server-ORM
+``` 
+
+While in the terminal, from the root directory of the project run ``cmake -B build`` to generate build files. After that, run ``cmake --build build`` to compile the project.
 
 ### Running
 
