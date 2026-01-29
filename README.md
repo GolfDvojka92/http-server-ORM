@@ -19,6 +19,16 @@ Connection: close
 
 Starts a locally hosted HTTP server that's capable of receiving GET and HEAD requests, formatted according to the RFC2616 referencing the HTTP/1.1 version of the protocol. It's capable of displaying only the most common types of text files, and requests for an unsupported file type are responded to with an application/octet-stream MIME type, meaning they are downloaded.
 
+## Usage guide
+
+### Building
+
+In terminal, from the root directory of the project run ``cmake -B build`` to gennerate build files. After that, run ``cmake --build build`` to compile the project.
+
+### Running
+
+To run the server launch the ``HTTPServer`` executable from the ``build/`` directory. The server is hosted on the localhost IP. While the server is running all HTTP ``GET`` and ``HEAD`` requests directed at it will look for the requested path inside the ``server_data/`` directory.
+
 ## Starting the server
 
 HTTP protocol uses TCP as the communication protocol. In C this means we have to create a server socket using the TCP standard (SOCK_STREAM).
