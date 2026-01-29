@@ -40,10 +40,3 @@ const char* get_mime_type(char *file_name) {
     }
     return types[idx].type;
 }
-
-char* relative_path(char* file_path) {
-    if (*file_path == '/')
-        file_path++;
-
-    return file_path;
-}

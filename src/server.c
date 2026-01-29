@@ -1,4 +1,5 @@
 #include "../include/server.h"
+#include <stdio.h>
 
 void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
     char *saveptr; // necessary because of thread safety
@@ -82,14 +83,22 @@ void* process_client(void* ptr_fd) {
         return NULL;
     }
 
+    char folder_name[] = "server_data";
+    char* full_path = malloc(sizeof(char) * strlen(folder_name) + strlen(response.path));
+    strcat(full_path, folder_name);
+    strcat(full_path, response.path);
+
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response.path), "rb");
+    FILE *searched_file = fopen(full_path, "rb");
     if (searched_file == NULL) {
         //FILE NOT FOUND
         response_buf = generate_response(response, 404, "text/html", ERR_404);
+        free(full_path);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
+
+    free(full_path);
 
     //READING FILE CONTENT
     fseek(searched_file, 0, SEEK_END);
