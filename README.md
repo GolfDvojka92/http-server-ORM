@@ -29,6 +29,10 @@ In terminal, from the root directory of the project run ``cmake -B build`` to ge
 
 To run the server launch the ``HTTPServer`` executable from the ``build/`` directory. The server is hosted on the localhost IP address. While the server is running all HTTP ``GET`` and ``HEAD`` requests directed at it will look for the requested path inside the ``server_data/`` directory.
 
+### Testing
+
+To test if the server works, you can send it a ``GET`` request using any method of your choice, or by compiling and running the ``client.c`` located in the ``portable/`` directory. To test it through a web browser, type ``http://localhost:8080/`` into the URL bar, and append any path of your choice to it.
+
 ## Starting the server
 
 HTTP protocol uses TCP as the communication protocol. In C this means we have to create a server socket using the TCP standard (SOCK_STREAM).
