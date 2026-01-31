@@ -23,21 +23,11 @@ Starts a locally hosted HTTP server that's capable of receiving GET and HEAD req
 
 ### Building
 
-In the directory where you wish to store the server files, clone the repo:
-
-```
-git clone https://github.com/GolfDvojka92/http-server-ORM
-``` 
-
-While in the terminal, from the root directory of the project run ``cmake -B build`` to generate build files. After that, run ``cmake --build build`` to compile the project.
+In terminal, from the root directory of the project run ``cmake -B build`` to generate build files. After that, run ``cmake --build build`` to compile the project.
 
 ### Running
 
 To run the server launch the ``HTTPServer`` executable from the ``build/`` directory. The server is hosted on the localhost IP address. While the server is running all HTTP ``GET`` and ``HEAD`` requests directed at it will look for the requested path inside the ``server_data/`` directory.
-
-### Testing
-
-To test if the server works, you can send it a ``GET`` request using any method of your choice, or by compiling and running the ``client.c`` located in the ``portable/`` directory. To test it through a web browser, type ``http://localhost:8080/`` into the URL bar, and append any path of your choice to it.
 
 ## Starting the server
 
