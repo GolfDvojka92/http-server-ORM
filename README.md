@@ -157,11 +157,21 @@ void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
 }
 ```
 
-Upon parsing the request line, we start handling the HTTP request. The server forbids access to the root directory.
+Upon parsing the request line, we start handling the HTTP request. The server checks if the request method is implemented, and if not returns a 501. It also forbids access to the root directory.
 
 ```
     // RESPONSE BUFFER
     char* response_buf;
+
+    // checking if request method is implemented
+    for (int i = 0; ;i++) {
+        if (strcmp(methods[i], "") == 0) {
+            response_buf = generate_response(response, 501, "text/html", ERR_501);
+        }
+        if (strcmp(methods[i], response.method) == 0) {
+            break;
+        }
+    }
 
     // DENYING ACCESS TO ROOT
     if (strcmp(response.path, "/") == 0) {
@@ -173,17 +183,24 @@ Upon parsing the request line, we start handling the HTTP request. The server fo
 
 ### Opening the requested file
 
-After that, it opens the requested file, and if it fails to do so, we return a 404.
+After that, it opens the requested file, and if it fails to do so, we return a 404. All data is stored in the ``server_data/`` directory, so it updates the path accordingly before attempting to open it.
 
 ```
+    char dir_name[] = "server_data";
+    char* full_path = malloc(sizeof(char) * strlen(dir_name) + strlen(response.path));
+    strcat(full_path, dir_name);
+    strcat(full_path, response.path);
+
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response.path), "rb");
+    FILE *searched_file = fopen(relative_path(full_path), "rb");
     if (searched_file == NULL) {
         //FILE NOT FOUND
         response_buf = generate_response(response, 404, "text/html", ERR_404);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
+
+    free(full_path);
 ```
 
 If the requested file is found, it calculates its size using ``ftell()`` and stores it into a long. The server then fills a buffer with the contents of the file, and forwards it to the ``generate_response()`` function, filling the response buffer.
