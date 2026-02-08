@@ -18,20 +18,23 @@ void error(void* msg) {
     exit(EXIT_FAILURE);
 }
 
-char* http_get_request_gen(char* path) {
+char* http_get_request_gen(char* method, char* path) {
     char* request = malloc((HEADER_SIZE_ESTIMATE) * sizeof(char));
     snprintf(request, HEADER_SIZE_ESTIMATE * sizeof(char),
-            "GET %s %s\r\n"
+            "%s /%s %s\r\n"
             "Host: %s\r\n",
-            path, PROTOCOL_VERSION, SERVER_IP_ADDRESS);
+            method, path, PROTOCOL_VERSION, SERVER_IP_ADDRESS);
     // GET method headers are HOST and the first line, no body
 
     return request;
 }
 
 int main(int argc, char** argv) {
-    if (argc != 2)
-        error("Invalid call format!\nSecond parameter is the name of the desired file!\n");
+    if (argc != 3)
+        error("Invalid call format!\nUsage: ./client [METHOD] [FILE_NAME]\nSupported methods: GET, HEAD\n");
+
+    if (strcmp(argv[1], "GET") != 0 && strcmp(argv[1], "HEAD") != 0)
+        error("Invalid method used!\nSupported methods: GET, HEAD\n");
 
     int client_fd;
     struct sockaddr_in server_addr;
@@ -51,7 +54,7 @@ int main(int argc, char** argv) {
 
     printf("Successfully connected to the server!\n");
 
-    char *request_buf = http_get_request_gen(argv[1]);
+    char *request_buf = http_get_request_gen(argv[1], argv[2]);
 
     if (send(client_fd, request_buf, strlen(request_buf), 0) == -1)
         perror("Failed to send HTTP request to server.\n");

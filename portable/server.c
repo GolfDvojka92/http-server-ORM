@@ -128,7 +128,7 @@ char* generate_response(struct request_line req_line, int status_code, const cha
              "Content-type: %s; charset=UTF-8\r\n"
              "Content-length: %zu\r\n"
              "Connection: close\r\n"
-             "\r\n",
+             "\r\n\0",
              req_line.protocol_version, status_code, get_status_text(status_code),
              content_type,
              strlen(body));
@@ -210,8 +210,9 @@ void* process_client(void* ptr_fd) {
 
 
     //SETTING UP FILE BUFFER FOR SENDING
-    char *file_buf = malloc(file_byte_count);
+    char *file_buf = malloc((file_byte_count + 1) * sizeof(char));
     fread(file_buf, sizeof(char), file_byte_count, searched_file);
+    file_buf[file_byte_count] = '\0';
 
     response_buf = generate_response(response, 200, get_mime_type(response.path), file_buf);
 
