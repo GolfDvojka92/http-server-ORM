@@ -4,7 +4,8 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <unistd.h>
 
-#define ERROR_EXIT(...) fprintf(stderr, __VA_ARGS__); exit(1)
-#define ERROR_RETURN(R, ...) fprintf(stderr, __VA_ARGS__); return(R)
+#define ERROR_EXIT(...) do { fprintf(stderr, __VA_ARGS__); exit(1); } while (0)
+#define ERROR_RETURN(R, ...) do { fprintf(stderr, __VA_ARGS__); return(R); } while (0)

@@ -11,3 +11,11 @@ add_executable(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
 )
+
+add_executable(Client
+    src/client.c
+)
+
+target_include_directories(Client PRIVATE
+    include
+)
