@@ -83,7 +83,7 @@ void* process_client(void* ptr_fd) {
         return NULL;
     }
 
-    char dir_name[] = "server_data";
+    char dir_name[] = "../server_data";
     char* full_path = malloc(sizeof(char) * strlen(dir_name) + strlen(response.path));
     strcat(full_path, dir_name);
     strcat(full_path, response.path);
