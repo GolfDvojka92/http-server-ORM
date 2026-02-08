@@ -99,7 +99,12 @@ char* relative_path(char* file_path) {
     if (*file_path == '/')
         file_path++;
 
-    return file_path;
+    char *structured_file_path = malloc(19 * sizeof(char) + strlen(file_path));
+
+    snprintf(structured_file_path, 19 * sizeof(char) + strlen(file_path),
+            "../../server_data/%s", file_path);
+
+    return structured_file_path;
 }
 
 void parse_request(char* buffer, ssize_t buf_len, struct request_line* msg) {
@@ -187,8 +192,10 @@ void* process_client(void* ptr_fd) {
         return NULL;
     }
 
+    char *file_path = relative_path(response.path);
     // OPENING THE FILE
-    FILE *searched_file = fopen(relative_path(response.path), "rb");
+    FILE *searched_file = fopen(file_path, "rb");
+    free(file_path);
     if (searched_file == NULL) {
         //FILE NOT FOUND
         response_buf = generate_response(response, 404, "text/html", ERR_404);
