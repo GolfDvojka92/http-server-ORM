@@ -24,10 +24,11 @@ Starts a locally hosted HTTP server that's capable of receiving GET and HEAD req
 ### Building
 
 In terminal, from the root directory of the project run ``cmake -B build`` to generate build files. After that, run ``cmake --build build`` to compile the project.
+To build the portable version of the project, from ```portable/build/``` directory run ```cmake --build .``` to compile the portable project variant.
 
 ### Running
 
-To run the server launch the ``HTTPServer`` executable from the ``build/`` directory. The server is hosted on the localhost IP address. While the server is running all HTTP ``GET`` and ``HEAD`` requests directed at it will look for the requested path inside the ``server_data/`` directory.
+To run the server launch the ``HTTPServer`` executable from the ``build/`` directory. The server is hosted on the localhost IP address. While the server is running all HTTP ``GET`` and ``HEAD`` requests directed at it will look for the requested path inside the ``server_data/`` directory. To run the client launch the ``Client`` executable form the ``build`` directory with two arguments, first the method either GET or HEAD and second the name of the file you want to search for on the server side.
 
 ## Starting the server
 
@@ -173,10 +174,10 @@ Upon parsing the request line, we start handling the HTTP request. The server ch
 
 ### Opening the requested file
 
-After that, it opens the requested file, and if it fails to do so, we return a 404. All data is stored in the ``server_data/`` directory, so it updates the path accordingly before attempting to open it.
+After that, it opens the requested file, and if it fails to do so, we return a 404. All data is stored in the ``server_data/`` directory, so it updates the path accordingly before attempting to open it. (NOTE: the binary is run from ``build/`` directory so the path to file must go one directory back and into the ``server_data/`` directory!)
 
 ```
-    char dir_name[] = "server_data";
+    char dir_name[] = "../server_data";
     char* full_path = malloc(sizeof(char) * strlen(dir_name) + strlen(response.path));
     strcat(full_path, dir_name);
     strcat(full_path, response.path);
@@ -186,6 +187,7 @@ After that, it opens the requested file, and if it fails to do so, we return a 4
     if (searched_file == NULL) {
         //FILE NOT FOUND
         response_buf = generate_response(response, 404, "text/html", ERR_404);
+        free(full_path);
         send_response(client_fd, response_buf, buffer, ptr_fd);
         return NULL;
     }
@@ -193,7 +195,7 @@ After that, it opens the requested file, and if it fails to do so, we return a 4
     free(full_path);
 ```
 
-If the requested file is found, it calculates its size using ``ftell()`` and stores it into a long. The server then fills a buffer with the contents of the file, and forwards it to the ``generate_response()`` function, filling the response buffer.
+If the requested file is found, it calculates its size using ``ftell()`` and stores it into a long. The server then fills a buffer with the contents of the file, and forwards it to the ``generate_response()`` function, filling the response buffer. (NOTE: Inserting char ```'\0'``` is a memory-safe precaution due to later use of method ```strcat()```!)
 
 ```
     //READING FILE CONTENT
@@ -203,15 +205,16 @@ If the requested file is found, it calculates its size using ``ftell()`` and sto
 
 
     //FILLING UP FILE BUFFER FOR SENDING
-    char *file_buf = malloc(file_byte_count);
+    char *file_buf = malloc(file_byte_count + 1);
     fread(file_buf, sizeof(char), file_byte_count, searched_file);
+    file_buf[file_byte_count] = '\0';
 
     response_buf = generate_response(response, 200, get_mime_type(response.path), file_buf);
 ```
 
 ### Generating HTTP response
 
-The ``generate_response()`` function returns a pointer to the finalized response buffer, ready to be sent to the client. The body is catenated to the response depending on the request method.
+The ``generate_response()`` function returns a pointer to the finalized response buffer, ready to be sent to the client. The body is catenated to the response depending on the request method. (NOTE: Inserting char ```'\0'``` is mandatory due to the fact that ```strcat()``` behaviour is undefined if both passed strings don't end with the null terminator!)
 
 ```
 char* generate_response(struct request_line req_line, int status_code, const char* content_type, const char* body) {
@@ -221,7 +224,7 @@ char* generate_response(struct request_line req_line, int status_code, const cha
              "Content-type: %s; charset=UTF-8\r\n"
              "Content-length: %zu\r\n"
              "Connection: close\r\n"
-             "\r\n",
+             "\r\n\0",
              req_line.protocol_version, status_code, get_status_text(status_code),
              content_type,
              strlen(body));
@@ -259,4 +262,90 @@ void send_response(int client_fd, char* response_buf, char* buffer, void* ptr_fd
     free(buffer);
     free(ptr_fd);
 }
+```
+
+## Client starting
+
+When using the client, we first need to ensure that the right paramethers and in the right order are passed to the program. That is why the first lines are related to the potential user errors that can occur.
+
+```c
+if (argc != 3)
+    ERROR_EXIT("Invalid call format!\nUsage: ./client [METHOD] [FILE_NAME]\nSupported methods: GET, HEAD\n");
+
+if (strcmp(argv[1], "GET") != 0 && strcmp(argv[1], "HEAD") != 0)
+    ERROR_EXIT("Invalid method used!\nSupported methods: GET, HEAD\n");
+```
+
+Then simmilar to the procedure on the server side, we need to create a socket, configure it and the connect to the server with the known local IP adress.
+
+```c
+int client_fd;
+struct sockaddr_in server_addr;
+    
+// Socket creation
+client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    
+if (client_fd == -1)
+    ERROR_EXIT("Socket creation failed.\n");
+
+printf("Socket successfully created!\n");
+
+// Socket configuration
+server_addr.sin_addr.s_addr = inet_addr(IP_ADDRESS);
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(PORT);
+
+// Connecting to server
+if (connect(client_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
+    ERROR_EXIT("Failed to connect to server.\n");
+
+printf("Successfully connected to the server!\n");
+```
+
+### Formatting the request message
+
+The next step is to send the message that is generated using the ```http_get_request_gen(char*, char*)``` method. The method formats the request according to the HTTP request message rules. They specify the first line contains the method name, full path to the file and HTTP version name, all seperated by a space. After the first line there is a list of header metadata in the format of ```Header_name: header_value```, one per line. The implemented methods ```GET``` and ```HEAD``` require only the header ```Host``` which specifies the IP adress to which the request is sent. In some cases the request message contains a body, however in the case of ```GET``` and ```HEAD``` methods, it is discouraged.
+
+```c
+char* http_get_request_gen(char* method, char* path) {
+    char* request = malloc((HEADER_SIZE_ESTIMATE) * sizeof(char));
+    snprintf(request, HEADER_SIZE_ESTIMATE * sizeof(char),
+            "%s /%s %s\r\n"
+            "Host: %s\r\n\0",
+            method, path, PROTOCOL_VERSION, SERVER_IP_ADDRESS);
+    // GET method headers are HOST and the first line, no body
+    // HEAD method shares the same headers
+
+    return request;
+}
+```
+
+After formatting the message, it is sent to the server, subsequently the response message is recieved and displayed in the terminal. The client closes after this procedure.
+
+```c
+// Forming request message
+char *request_buf = http_get_request_gen(argv[1], argv[2]);
+
+// Sending request    
+if (send(client_fd, request_buf, strlen(request_buf), 0) == -1)
+    ERROR_EXIT("Failed to send HTTP request to server.\n");
+
+printf("Sent the HTTP request to server.\n");
+
+char *recv_message = malloc(DEFAULT_BUFF_SIZE * sizeof(char));
+int message_len;
+
+// Receiving answer
+if ( (message_len = recv(client_fd, recv_message, DEFAULT_BUFF_SIZE, 0)) > 0) {
+    recv_message[message_len] = '\0';
+    printf("Recieved response from server.\n");
+    printf("Message Length: %d\n", message_len);
+    printf("Message Content:\n%s\n", recv_message);
+}
+    
+// Closing client
+free(recv_message);
+free(request_buf);
+close(client_fd);
+return 0;
 ```
